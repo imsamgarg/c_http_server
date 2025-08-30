@@ -9,7 +9,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "read_http.c"
+#include "http_request.h"
+#include "read_http.h"
+#include "server.h"
+#include "ws.h"
+
 int sfd = -1;
 
 void handle_sigint(int sig) {
@@ -61,26 +65,39 @@ void start_server(struct addrinfo *addr) {
 
     read_http(fd, req, &raw_request, &raw_request_size);
 
+    if (is_upgrade_request(req)) {
+      printf("Upgrading to WebSocket\n");
+      fflush(stdout);
+      handle_ws_req(fd, req);
+      continue;
+    }
+
     printf("%s %s [%d]\n", req->method, req->path, raw_request_size);
     fflush(stdout);
 
     char buf[128];
     sprintf(buf,
             "HTTP/1.1 200 OK\r\nContent-Length: %d\r\nContent-Type: "
-            "text/plain; charset=asci\r\n\r\n",
+            "text/plain; charset=utf8\r\n\r\n",
             raw_request_size - 1);
 
-    send(fd, buf, strlen(buf), 0);
-    send(fd, raw_request, raw_request_size, 0);
-
-    // TODO: Better memory management
-    free(raw_request);
-    for (int i = 0; i < req->headers_count; i++) {
-      free(req->headers[i].name);
-      free(req->headers[i].value);
+    if (send(fd, buf, strlen(buf), 0) < 1) {
+      perror("send");
     }
-    free(req->headers);
-    free(req);
+    if (send(fd, raw_request, raw_request_size, 0) < 1) {
+      perror("send");
+    }
+
+    // printf("Response sent\n");
+    // fflush(stdout);
+    // TODO: Fix the memory management issues
+    // free(raw_request);
+    // for (int i = 0; i < req->headers_count; i++) {
+    //   free(req->headers[i].name);
+    //   free(req->headers[i].value);
+    // }
+    // free(req->headers);
+    // free(req);
 
     close(fd);
   }

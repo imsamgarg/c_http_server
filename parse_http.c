@@ -3,18 +3,8 @@
 #include <string.h>
 #include <sys/types.h>
 
-struct http_header {
-  char *name;
-  char *value;
-};
-
-struct http_request {
-  char method[6];
-  // INFO: Supporting only 256 byte path for now.
-  char path[256];
-  struct http_header *headers;
-  int headers_count;
-};
+#include "http_request.h"
+#include "utils.h"
 
 // GET /hello/world HTTP/1.1\r\n
 // Host: example.com\r\n
@@ -42,6 +32,7 @@ int parse_http(char *request, size_t size, struct http_request *req) {
   struct http_header *headers = malloc(20 * sizeof(struct http_header));
   memset(headers, 0, 20 * sizeof(struct http_header));
   req->headers = headers;
+  req->headers_count = 0;
 
   struct http_header *header = headers;
 
@@ -60,8 +51,9 @@ int parse_http(char *request, size_t size, struct http_request *req) {
     value_buffer[size] = 0;
 
     header->name = name_buffer;
+    lower_case(header->name);
+
     header->value = value_buffer;
-    // printf("%s : %s\n", name_buffer, value_buffer);
     // fflush(stdout);
     header++;
     req->headers_count++;

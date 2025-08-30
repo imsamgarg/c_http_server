@@ -2,15 +2,15 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
-#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "server.c"
+#include "server.h"
 
-int main(int argc, char *argv[]) {
+int main() {
+  setbuf(stdout, NULL);
   struct addrinfo hints;
   struct addrinfo *res;
 
@@ -34,7 +34,6 @@ int main(int argc, char *argv[]) {
               ipstr, sizeof(ipstr));
 
     port = ntohs(((struct sockaddr_in *)res->ai_addr)->sin_port);
-    printf("Starting server on port: %d\n", port);
   } else {
 
     char ipstr[INET6_ADDRSTRLEN];
@@ -43,8 +42,9 @@ int main(int argc, char *argv[]) {
               sizeof(ipstr));
 
     port = ntohs(((struct sockaddr_in6 *)res->ai_addr)->sin6_port);
-    printf("Starting server on port: %d\n", port);
   }
+
+  printf("Starting server on port: %d\n", port);
 
   start_server(res);
 

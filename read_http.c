@@ -5,7 +5,8 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "parse_http.c"
+#include "http_request.h"
+#include "parse_http.h"
 
 int read_http(int fd, struct http_request *req, char **raw_request,
               int *raw_request_size) {
@@ -38,16 +39,8 @@ int read_http(int fd, struct http_request *req, char **raw_request,
 
   request[ptr] = '\0';
 
-  FILE *file = fopen("request.html", "w+");
-
-  fprintf(file, "%s", request);
-
-  fclose(file);
-
   *raw_request = request;
   *raw_request_size = ptr;
-
-  // free(request);
 
   return parse_http(request, ptr, req);
 }
