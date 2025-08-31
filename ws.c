@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "http_request.h"
+#include "ws_message.h"
 
 int is_upgrade_request(struct http_request *req) {
   // Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
@@ -103,8 +104,24 @@ void handle_ws_req(int fd, struct http_request *req) {
       return;
     }
 
-    // TODO: Parse message;
-    // TODO: Send message;
-    printf("Received: %s\n", buf);
+    struct ws_message msg;
+    parse_ws_message(buf, &msg);
+
+    switch (msg.opcode) {
+    case WS_CLOSE_FRAME:
+      break;
+    case WS_TEXT_FRAME:
+      printf("Message Received: %s\n", msg.payload);
+      // TODO: Echo the message back with proper ws framing
+      // send(fd, msg.payload, msg.payload_length, 0);
+      break;
+    case WS_BINARY_FRAME:
+      printf("Binary Message Received: %d\n", msg.payload_length);
+      break;
+    case WS_PING_FRAME:
+      break;
+    case WS_PONG_FRAME:
+      break;
+    }
   }
 }
