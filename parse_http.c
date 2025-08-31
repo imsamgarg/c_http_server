@@ -4,6 +4,7 @@
 #include <sys/types.h>
 
 #include "http_request.h"
+#include "parse_http.h"
 #include "utils.h"
 
 // GET /hello/world HTTP/1.1\r\n
@@ -23,30 +24,30 @@ char *read_block(char *buffer, char *start, char ch, char *name) {
   return ptr + 1;
 }
 
-int parse_http(char *request, size_t size, struct http_request *req) {
+int parse_http(char *request, size_t size, http_request *req, arena *a) {
   char *ptr = read_block(req->method, request, ' ', "Method");
   ptr = read_block(req->path, ptr, ' ', "Path");
   ptr = strchr(ptr, '\n') + 1;
 
   // INFO: Only parsing 20 headers at max
-  struct http_header *headers = malloc(20 * sizeof(struct http_header));
-  memset(headers, 0, 20 * sizeof(struct http_header));
+  http_header *headers = allocate(20 * sizeof(http_header), a);
+  memset(headers, 0, 20 * sizeof(http_header));
   req->headers = headers;
   req->headers_count = 0;
 
-  struct http_header *header = headers;
+  http_header *header = headers;
 
   while (*ptr) {
     char *newptr = strchr(ptr, ':');
     int size = newptr - ptr;
-    char *name_buffer = malloc(size + 1);
+    char *name_buffer = allocate(size + 1, a);
     memcpy(name_buffer, ptr, size);
     name_buffer[size] = 0;
 
     ptr = newptr + 2;
     newptr = strchr(ptr, '\r');
     size = newptr - ptr;
-    char *value_buffer = malloc(size + 1);
+    char *value_buffer = allocate(size + 1, a);
     memcpy(value_buffer, ptr, size);
     value_buffer[size] = 0;
 

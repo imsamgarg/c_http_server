@@ -9,7 +9,9 @@
 #include "parse_http.h"
 
 int read_http(int fd, struct http_request *req, char **raw_request,
-              int *raw_request_size) {
+              int *raw_request_size, arena *a) {
+
+  // TODO: Use arena to allocate memory
   const int size = 4096;
   char buf[size];
   char *request = (char *)malloc(size * 4);
@@ -42,5 +44,5 @@ int read_http(int fd, struct http_request *req, char **raw_request,
   *raw_request = request;
   *raw_request_size = ptr;
 
-  return parse_http(request, ptr, req);
+  return parse_http(request, ptr, req, a);
 }

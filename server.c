@@ -52,6 +52,9 @@ void start_server(struct addrinfo *addr) {
   struct sockaddr *client_addr;
   socklen_t client_addr_size;
 
+  arena a;
+  init_arena(&a, 2);
+
   while (1) {
     int fd = accept(sfd, client_addr, &client_addr_size);
     if (fd < 0) {
@@ -59,11 +62,11 @@ void start_server(struct addrinfo *addr) {
       continue;
     }
 
-    struct http_request *req = malloc(sizeof(struct http_request));
+    http_request *req = allocate(sizeof(http_request), &a);
     char *raw_request;
     int raw_request_size;
 
-    read_http(fd, req, &raw_request, &raw_request_size);
+    read_http(fd, req, &raw_request, &raw_request_size, &a);
 
     if (is_upgrade_request(req)) {
       printf("Upgrading to WebSocket\n");
@@ -99,6 +102,7 @@ void start_server(struct addrinfo *addr) {
     // free(req->headers);
     // free(req);
 
+    reset_arena(&a);
     close(fd);
   }
 
