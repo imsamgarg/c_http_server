@@ -12,9 +12,17 @@ struct ws_message {
   //  0x8 → connection close
   //  0x9 → ping
   //  0xA → pong
-  int opcode;
+  char opcode;
   int payload_length;
   char *payload;
 };
 
+struct ws_frame {
+  char *buf;
+  int buf_length;
+  int payload_length;
+};
+
 int parse_ws_message(char *buf, struct ws_message *msg);
+
+int ws_frame_message(struct ws_message msg, struct ws_frame *frame);

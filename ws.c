@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,35 +15,34 @@ int is_upgrade_request(struct http_request *req) {
   // Connection: Upgrade
 
   struct http_header *upgrade_head = get_header(req, "upgrade");
-  printf("Checking upgrade header\n");
   if (upgrade_head == NULL || strcmp(upgrade_head->value, "websocket") != 0) {
     return 0;
   }
 
-  printf("Found upgrade header\n");
-
-  struct http_header *con_head = get_header(req, "connection");
-  if (con_head == NULL || strcmp(con_head->value, "Upgrade") != 0) {
-    return 0;
-  }
-  printf("Found connection header\n");
+  // INFO: Not checking connection header for now as the firefox sends
+  // keep-alive, Upgrade but chrome sends only Upgrade struct http_header
+  //
+  // *con_head = get_header(req, "connection"); if (con_head == NULL ||
+  // strcmp(con_head->value, "Upgrade") != 0) {
+  //   return 0;
+  // }
+  // printf("Found connection header\n");
 
   struct http_header *sec_key_head = get_header(req, "sec-websocket-key");
   if (sec_key_head == NULL) {
     return 0;
   }
-  printf("Found sec-websocket-key header\n");
 
   struct http_header *sec_version_head =
       get_header(req, "sec-websocket-version");
   if (sec_version_head == NULL || strcmp(sec_version_head->value, "13") != 0) {
     return 0;
   }
-  printf("Found sec-websocket-version header\n");
 
   return 1;
 }
 
+// TODO: Create a sha1 and base64 function instead of using method
 int generate_ws_accept_key(char *client_key, char *key) {
   const char guid[] = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
   size_t client_key_size = strlen(client_key);
@@ -81,9 +81,10 @@ void handle_ws_req(int fd, struct http_request *req) {
     return;
   }
 
-  printf("key len: %ld\n", strlen(base64_sha_key));
+  // INFO: Remove newline from base64_sha_key
+  *strchr(base64_sha_key, '\n') = 0;
 
-  char buf[256];
+  char buf[256] = {0};
 
   sprintf(buf,
           "HTTP/1.1 101 Switching Protocols\r\n"
@@ -92,29 +93,42 @@ void handle_ws_req(int fd, struct http_request *req) {
           "Sec-WebSocket-Accept: %s\r\n\r\n",
           base64_sha_key);
 
-  // WARN: For some reason there's an extra newline character at the last of the
-  // string, inspect it
-  send(fd, buf, strlen(buf) - 1, 0);
+  send(fd, buf, strlen(buf), 0);
 
-  while (1) {
+  int ret = 1;
+  while (ret) {
     char buf[256] = {0};
-    if (recv(fd, buf, sizeof(buf), 0) < 0) {
+
+    // TODO: Handle connection close
+    size_t bytes_read = recv(fd, buf, sizeof(buf), 0);
+    if (bytes_read < 0) {
       perror("recv");
       close(fd);
       return;
+    } else if (bytes_read == 0) {
+      printf("Connection closed by client\n");
+      break;
     }
 
     struct ws_message msg;
     parse_ws_message(buf, &msg);
 
+    // TODO: Handle other opcodes
     switch (msg.opcode) {
     case WS_CLOSE_FRAME:
       break;
-    case WS_TEXT_FRAME:
+    case WS_TEXT_FRAME: {
       printf("Message Received: %s\n", msg.payload);
-      // TODO: Echo the message back with proper ws framing
-      // send(fd, msg.payload, msg.payload_length, 0);
+      struct ws_frame frame;
+
+      if (ws_frame_message(msg, &frame) < 0) {
+        perror("ws_frame");
+        break;
+      }
+
+      send(fd, frame.buf, frame.buf_length, 0);
       break;
+    }
     case WS_BINARY_FRAME:
       printf("Binary Message Received: %d\n", msg.payload_length);
       break;
@@ -124,4 +138,6 @@ void handle_ws_req(int fd, struct http_request *req) {
       break;
     }
   }
+
+  close(fd);
 }

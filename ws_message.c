@@ -11,11 +11,50 @@
 //  +---------------------------------------------------------------+
 
 #include <inttypes.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
 
 #include "ws_message.h"
+
+int ws_frame_message(struct ws_message msg, struct ws_frame *frame) {
+  char *buf = malloc(msg.payload_length + 10); // max 10 bytes for the header
+
+  printf("Framing message of length: %d\n", msg.payload_length);
+
+  buf[0] = 0b10000000 | msg.opcode;
+  int ptr = 0;
+  if (msg.payload_length <= 125) {
+    buf[1] = (char)msg.payload_length;
+    ptr = 2;
+  } else if (msg.payload_length == 126) {
+    uint16_t len = msg.payload_length;
+    buf[1] = 126;
+    buf[2] = len >> 8;
+    buf[3] = len & 0xff;
+    ptr = 4;
+  } else {
+    buf[1] = 127;
+    u_int64_t len = msg.payload_length;
+    int i = 0;
+    for (; i < 8; i++) {
+      buf[2 + i] = len >> ((7 - i) * 8) & 0xff;
+    }
+
+    ptr = 2 + i;
+  }
+
+  memcpy(buf + ptr, msg.payload, msg.payload_length);
+
+  frame->payload_length = msg.payload_length;
+  frame->buf_length = (ptr) + msg.payload_length;
+  frame->buf = buf;
+
+  return 0;
+}
 
 int parse_ws_message(char *buf, struct ws_message *msg) {
 
@@ -69,7 +108,6 @@ int parse_ws_message(char *buf, struct ws_message *msg) {
   msg->opcode = opcode;
   msg->payload = data_buf;
   msg->payload_length = payload_length;
-  printf("Payload length: %d\n", msg->payload_length);
 
   return 0;
 }

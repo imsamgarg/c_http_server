@@ -3,7 +3,7 @@ CFLAGS  = -Wall -O2
 LDFLAGS =
 TARGET  = server
 
-SRC = crypto.c http_request.c main.c parse_http.c read_http.c utils.c ws.c server.c
+SRC = crypto.c http_request.c main.c parse_http.c read_http.c utils.c ws.c server.c ws_message.c
 OBJ = $(SRC:.c=.o)
 
 all: $(TARGET)
