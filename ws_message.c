@@ -10,6 +10,8 @@
 //  |                     Payload Data (x bytes)                    |
 //  +---------------------------------------------------------------+
 
+#include <emmintrin.h>
+#include <immintrin.h>
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -56,9 +58,57 @@ int ws_frame_message(struct ws_message msg, struct ws_frame *frame) {
   return 0;
 }
 
-int parse_ws_message(char *buf, struct ws_message *msg) {
+char *unmask(char *buf, int len, const char mask_keys[4]) {
+  uint64_t mask;
 
-  printf("First byte: %d, Second byte: %d\n", buf[0] & 0b10000000, buf[1]);
+  int chunk_size = 16;
+  memcpy(&mask, mask_keys, 4);
+  mask = mask << 32 | mask;
+
+  __m128i mask_128 = _mm_set1_epi64x(mask);
+
+  char *data_buf = malloc(len + (chunk_size - len % chunk_size) + 1);
+
+  int i = 0;
+  int aligned = ((uintptr_t)(buf) % chunk_size) == 0;
+  // printf("Buffer aligned: %d, %p\n", aligned, buf);
+
+  int unaligned_bytes =
+      (chunk_size - (uintptr_t)(buf) % chunk_size) % chunk_size;
+
+  // TODO: Handle unaligned bytes at the start, make it working
+  // printf("Unaligned bytes: %d\n", unaligned_bytes);
+
+  // while (i < len && ((uintptr_t)(buf + i) % chunk_size) != 0) {
+  //   data_buf[i] = buf[i] ^ mask_keys[i % 4];
+  //   i++;
+  // }
+  //
+  // printf("i after unaligned: %d, aligned: %d\n", i,
+  //        (uintptr_t)(buf + i) % chunk_size == 0);
+
+  for (; i + chunk_size <= len; i += chunk_size) {
+    // uint64_t num = *((uint64_t *)(buf + i));
+    // *((uint64_t *)(data_buf + i)) = num ^ mask;
+
+    // load u means unaligned load, coz the buffer may not be aligned
+    __m128i chunk = _mm_loadu_si128((__m128i *)(buf + i));
+    chunk = _mm_xor_si128(chunk, mask_128);
+    _mm_storeu_si128((__m128i *)(data_buf + i), chunk);
+  }
+
+  for (; i < len; i++) {
+    char num = buf[i];
+
+    data_buf[i] = num ^ mask_keys[i % 4];
+  }
+
+  data_buf[i] = 0; // for strings
+
+  return data_buf;
+}
+
+int parse_ws_message(char *buf, struct ws_message *msg) {
   if ((buf[0] & 0b10000000) != 0b10000000) {
     // INFO: For simplicity not handling FIN condition
     return -1;
@@ -97,16 +147,17 @@ int parse_ws_message(char *buf, struct ws_message *msg) {
 
   ptr += 4;
 
-  char *data_buf = malloc(payload_length + 1);
-
-  for (int i = 0; i < payload_length; i++) {
-    data_buf[i] = mask_keys[i % 4] ^ buf[ptr + i];
-  }
-
-  data_buf[payload_length] = 0; // for strings
+  // char *data_buf = malloc(payload_length + 1);
+  //
+  // for (int i = 0; i < payload_length; i++) {
+  //   data_buf[i] = mask_keys[i % 4] ^ buf[ptr + i];
+  // }
+  //
+  // data_buf[payload_length] = 0; // for strings
 
   msg->opcode = opcode;
-  msg->payload = data_buf;
+  // msg->payload = data_buf;
+  msg->payload = unmask(buf + ptr, payload_length, mask_keys);
   msg->payload_length = payload_length;
 
   return 0;
